@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.Rendering;
 using Microsoft.EntityFrameworkCore;
@@ -10,6 +11,8 @@ using MyTodoApp.Models;
 
 namespace MyTodoApp.Controllers
 {
+    // Todos os métodos necessitam de um usuário logado pra utilização.
+    [Authorize]
     public class TodoController : Controller
     {
         private readonly ApplicationDbContext _context;
@@ -22,32 +25,29 @@ namespace MyTodoApp.Controllers
         // GET: Todo
         public async Task<IActionResult> Index()
         {
-            return View(await _context.Todos.ToListAsync());
+            return View(await _context.Todos
+                .AsNoTracking()
+                .Where(x => x.User == User.Identity.Name)
+                .ToListAsync());
         }
 
         // GET: Todo/Details/5
         public async Task<IActionResult> Details(int? id)
         {
-            if (id == null)
-            {
-                return NotFound();
-            }
+            if (id == null) return NotFound();
 
             var todo = await _context.Todos
                 .FirstOrDefaultAsync(m => m.Id == id);
-            if (todo == null)
-            {
-                return NotFound();
-            }
+
+            if (todo == null) return NotFound();
+
+            if (todo.User != User.Identity.Name) return NotFound();
 
             return View(todo);
         }
 
         // GET: Todo/Create
-        public IActionResult Create()
-        {
-            return View();
-        }
+        public IActionResult Create() => View();
 
         // POST: Todo/Create
         // To protect from overposting attacks, enable the specific properties you want to bind to.
@@ -58,6 +58,8 @@ namespace MyTodoApp.Controllers
         {
             if (ModelState.IsValid)
             {
+                todo.User = User.Identity.Name;
+
                 _context.Add(todo);
                 await _context.SaveChangesAsync();
                 return RedirectToAction(nameof(Index));
@@ -68,16 +70,11 @@ namespace MyTodoApp.Controllers
         // GET: Todo/Edit/5
         public async Task<IActionResult> Edit(int? id)
         {
-            if (id == null)
-            {
-                return NotFound();
-            }
+            if (id == null) return NotFound();
 
             var todo = await _context.Todos.FindAsync(id);
-            if (todo == null)
-            {
-                return NotFound();
-            }
+            if (todo == null) return NotFound();
+
             return View(todo);
         }
 
@@ -86,17 +83,17 @@ namespace MyTodoApp.Controllers
         // For more details, see http://go.microsoft.com/fwlink/?LinkId=317598.
         [HttpPost]
         [ValidateAntiForgeryToken]
-        public async Task<IActionResult> Edit(int id, [Bind("Id,Title,Done,CreatedAt,LastUpdateDate,User")] Todo todo)
+        public async Task<IActionResult> Edit(int id, [Bind("Id,Title,Done")] Todo todo)
         {
-            if (id != todo.Id)
-            {
-                return NotFound();
-            }
+            if (id != todo.Id) return NotFound();
 
             if (ModelState.IsValid)
             {
                 try
                 {
+                    todo.User = User.Identity.Name;
+                    todo.LastUpdateDate = DateTime.Now;
+
                     _context.Update(todo);
                     await _context.SaveChangesAsync();
                 }
@@ -113,23 +110,23 @@ namespace MyTodoApp.Controllers
                 }
                 return RedirectToAction(nameof(Index));
             }
+
+            if (todo.User != User.Identity.Name) return NotFound();
+
             return View(todo);
         }
 
         // GET: Todo/Delete/5
         public async Task<IActionResult> Delete(int? id)
         {
-            if (id == null)
-            {
-                return NotFound();
-            }
+            if (id == null) return NotFound();
 
             var todo = await _context.Todos
                 .FirstOrDefaultAsync(m => m.Id == id);
-            if (todo == null)
-            {
-                return NotFound();
-            }
+
+            if (todo == null) return NotFound();
+
+            if (todo.User != User.Identity.Name) return NotFound();
 
             return View(todo);
         }
@@ -145,9 +142,6 @@ namespace MyTodoApp.Controllers
             return RedirectToAction(nameof(Index));
         }
 
-        private bool TodoExists(int id)
-        {
-            return _context.Todos.Any(e => e.Id == id);
-        }
+        private bool TodoExists(int id) => _context.Todos.Any(e => e.Id == id);
     }
 }
